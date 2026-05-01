@@ -11,60 +11,40 @@ fn euclidean_rhythm(pulses: usize, steps: usize) -> Vec<bool> {
         return vec![true; steps]; // 全てオンセット
     }
 
-    // 初期シーケンスの生成 (true=オンセット, false=休符)
-    let mut sequence = Vec::with_capacity(steps);
-    sequence.extend(vec![true; pulses]);
-    sequence.extend(vec![false; steps - pulses]);
+    // ビョルクルンドのアルゴリズム
+    let mut groups: Vec<Vec<bool>> = vec![vec![true]; pulses];
+    let mut remainders: Vec<Vec<bool>> = vec![vec![false]; steps - pulses];
 
-    // 各要素を単一の要素を持つベクターに変換
-    let mut bucket: Vec<Vec<bool>> = sequence.into_iter().map(|x| vec![x]).collect();
-    // [true, true, true, true, true, false, false, false] から
-    // [[true], [true], [true], [true], [true], [false], [false], [false]] になる
+    while remainders.len() > 1 {
+        let min_len = std::cmp::min(groups.len(), remainders.len());
 
-    // バケットが2つ以下になるまでグループ化を繰り返す
-    // 1. 初期状態:
-    // bucket = [[t], [t], [t], [t], [t], [f], [f], [f]]
-    while bucket.len() > 2 {
-        let mut next_bucket = Vec::new();
-        let remainder = bucket.len() % 2;
-        let pairs = bucket.len() / 2;
-
-        // 隣接するグループを結合
-        for i in 0..pairs {
-            let mut group = bucket[i].clone();
-            group.extend(bucket[pairs + i].clone());
-            next_bucket.push(group);
+        for i in 0..min_len {
+            groups[i].extend(remainders[i].clone());
         }
 
-        // 余りのグループがある場合は追加
-        if remainder == 1 {
-            next_bucket.push(bucket[bucket.len() - 1].clone());
+        if remainders.len() <= groups.len() {
+            let mut next_remainders = Vec::new();
+            for i in min_len..groups.len() {
+                next_remainders.push(groups[i].clone());
+            }
+            groups.truncate(min_len);
+            remainders = next_remainders;
+        } else {
+            let mut next_remainders = Vec::new();
+            for i in min_len..remainders.len() {
+                next_remainders.push(remainders[i].clone());
+            }
+            remainders = next_remainders;
         }
-
-        bucket = next_bucket;
-
-        // 2. 1回目のループ:
-        // pairs = 4
-        // bucket[0] + bucket[4] = [t,t]
-        // bucket[1] + bucket[5] = [t,f]
-        // bucket[2] + bucket[6] = [t,f]
-        // bucket[3] + bucket[7] = [t,f]
-        // next_bucket = [[t,t], [t,f], [t,f], [t,f]]
-        // 3. 2回目のループ:
-        // pairs = 2
-        // bucket[0] + bucket[2] = [t,t,t,f]
-        // bucket[1] + bucket[3] = [t,f,t,f]
-        // next_bucket = [[t,t,t,f], [t,f,t,f]]
     }
 
-    // 最終的なリズムパターンの生成
-    let mut result = bucket[0].clone();
-    if bucket.len() > 1 {
-        result.extend(bucket[1].clone());
+    let mut result = Vec::with_capacity(steps);
+    for group in groups {
+        result.extend(group);
     }
-
-    // 4. 最終結合:
-    // result = [t,.,t,t,.,t,t,.]  // [x.xx.xx.]
+    for remainder in remainders {
+        result.extend(remainder);
+    }
 
     result
 }
@@ -100,24 +80,11 @@ fn rhythm_to_string(rhythm: &[bool]) -> String {
 
 fn main() {
     // テスト用のリズムパターン例
-    // let examples = [
-    //     (3, 8),  // Cuban tresillo
-    //     (5, 8),  // Cuban cinquillo
-    //     (5, 16), // Bossa-nova
-    //     (7, 16), // Brazilian Samba
-    // ];
     let examples = [
-        (1, 16),
-        (2, 16),
-        (3, 16),
-        (4, 16),
-        (5, 16),
-        (6, 16),
-        (7, 16),
-        (8, 16),
-        (9, 16),
-        (10, 16),
-        (11, 16),
+        (3, 8),  // Cuban tresillo
+        (5, 8),  // Cuban cinquillo
+        (5, 16), // Bossa-nova
+        (7, 16), // Brazilian Samba
     ];
 
     // 各リズムパターンの生成と表示
@@ -131,5 +98,18 @@ fn main() {
             println!("  Rotation {}: [{}]", i, rhythm_to_string(&rotated));
         }
         println!("");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_euclidean_rhythms() {
+        assert_eq!(rhythm_to_string(&euclidean_rhythm(3, 8)), "x..x..x.");
+        assert_eq!(rhythm_to_string(&euclidean_rhythm(5, 8)), "x.xx.xx.");
+        assert_eq!(rhythm_to_string(&euclidean_rhythm(5, 16)), "x..x..x..x..x...");
+        assert_eq!(rhythm_to_string(&euclidean_rhythm(7, 16)), "x..x.x.x..x.x.x.");
     }
 }
