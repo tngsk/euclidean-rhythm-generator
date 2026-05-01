@@ -69,16 +69,21 @@ fn euclidean_rhythm(pulses: usize, steps: usize) -> Vec<bool> {
     result
 }
 
-/// リズムパターンを指定した数だけ回転させる関数
 fn rotate_rhythm(rhythm: &[bool], rotation: usize) -> Vec<bool> {
     let len = rhythm.len();
     if len == 0 {
         return vec![];
     }
     let rotation = rotation % len;
+    if rotation == 0 {
+        return rhythm.to_vec();
+    }
+
+    // 右シフト（音楽的な遅延）を実装
+    let split_pos = len - rotation;
     let mut result = Vec::with_capacity(len);
-    result.extend_from_slice(&rhythm[rotation..]);
-    result.extend_from_slice(&rhythm[..rotation]);
+    result.extend_from_slice(&rhythm[split_pos..]);
+    result.extend_from_slice(&rhythm[..split_pos]);
     result
 }
 
@@ -95,11 +100,24 @@ fn rhythm_to_string(rhythm: &[bool]) -> String {
 
 fn main() {
     // テスト用のリズムパターン例
+    // let examples = [
+    //     (3, 8),  // Cuban tresillo
+    //     (5, 8),  // Cuban cinquillo
+    //     (5, 16), // Bossa-nova
+    //     (7, 16), // Brazilian Samba
+    // ];
     let examples = [
-        (3, 8),  // Cuban tresillo
-        (5, 8),  // Cuban cinquillo
-        (5, 16), // Bossa-nova
-        (7, 16), // Brazilian Samba
+        (1, 16),
+        (2, 16),
+        (3, 16),
+        (4, 16),
+        (5, 16),
+        (6, 16),
+        (7, 16),
+        (8, 16),
+        (9, 16),
+        (10, 16),
+        (11, 16),
     ];
 
     // 各リズムパターンの生成と表示
