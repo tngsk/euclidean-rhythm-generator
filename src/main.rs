@@ -1,115 +1,121 @@
-/// ユークリッドアルゴリズムを使用してリズムパターンを生成する関数
-fn euclidean_rhythm(pulses: usize, steps: usize) -> Vec<bool> {
-    // パラメータのバリデーション
-    if pulses > steps {
-        return vec![];
-    }
-    if pulses == 0 {
-        return vec![false; steps]; // 全て休符
-    }
-    if pulses == steps {
-        return vec![true; steps]; // 全てオンセット
-    }
+mod rhythm;
 
-    // ビョルクルンドのアルゴリズム
-    let mut groups: Vec<Vec<bool>> = vec![vec![true]; pulses];
-    let mut remainders: Vec<Vec<bool>> = vec![vec![false]; steps - pulses];
+use crossterm::{
+    event::{self, Event, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Style},
+    text::Text,
+    widgets::{Block, Borders, Paragraph},
+    Terminal,
+};
+use std::{error::Error, io};
+use rhythm::{euclidean_rhythm, rotate_rhythm, rhythm_to_string};
 
-    while remainders.len() > 1 {
-        let min_len = std::cmp::min(groups.len(), remainders.len());
+fn main() -> Result<(), Box<dyn Error>> {
+    // ターミナルのセットアップ
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
 
-        for i in 0..min_len {
-            groups[i].extend(remainders[i].clone());
-        }
-
-        if remainders.len() <= groups.len() {
-            let mut next_remainders = Vec::new();
-            for i in min_len..groups.len() {
-                next_remainders.push(groups[i].clone());
-            }
-            groups.truncate(min_len);
-            remainders = next_remainders;
-        } else {
-            let mut next_remainders = Vec::new();
-            for i in min_len..remainders.len() {
-                next_remainders.push(remainders[i].clone());
-            }
-            remainders = next_remainders;
-        }
-    }
-
-    let mut result = Vec::with_capacity(steps);
-    for group in groups {
-        result.extend(group);
-    }
-    for remainder in remainders {
-        result.extend(remainder);
-    }
-
-    result
-}
-
-fn rotate_rhythm(rhythm: &[bool], rotation: usize) -> Vec<bool> {
-    let len = rhythm.len();
-    if len == 0 {
-        return vec![];
-    }
-    let rotation = rotation % len;
-    if rotation == 0 {
-        return rhythm.to_vec();
-    }
-
-    // 右シフト（音楽的な遅延）を実装
-    let split_pos = len - rotation;
-    let mut result = Vec::with_capacity(len);
-    result.extend_from_slice(&rhythm[split_pos..]);
-    result.extend_from_slice(&rhythm[..split_pos]);
-    result
-}
-
-/// リズムパターンを視覚的な文字列に変換する関数
-/// true = "x" (オンセット)
-/// false = "." (休符)
-fn rhythm_to_string(rhythm: &[bool]) -> String {
-    rhythm
-        .iter()
-        .map(|&x| if x { "x" } else { "." })
-        .collect::<Vec<_>>()
-        .join("")
-}
-
-fn main() {
-    // テスト用のリズムパターン例
-    let examples = [
-        (3, 8),  // Cuban tresillo
-        (5, 8),  // Cuban cinquillo
-        (5, 16), // Bossa-nova
-        (7, 16), // Brazilian Samba
+    // アプリケーションの状態
+    let examples = vec![
+        (3, 8, "Cuban tresillo"),
+        (5, 8, "Cuban cinquillo"),
+        (5, 16, "Bossa-nova"),
+        (7, 16, "Brazilian Samba"),
     ];
 
-    // 各リズムパターンの生成と表示
-    for (pulses, steps) in examples {
-        let rhythm = euclidean_rhythm(pulses, steps);
-        println!("E({}, {}) = [{}]", pulses, steps, rhythm_to_string(&rhythm));
+    let mut selected_example = 0;
 
-        // 全ての回転パターンを表示
-        for i in 1..steps {
-            let rotated = rotate_rhythm(&rhythm, i);
-            println!("  Rotation {}: [{}]", i, rhythm_to_string(&rotated));
+    // メインループ
+    loop {
+        terminal.draw(|f| {
+            let size = f.area();
+
+            // レイアウトの定義
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .margin(1)
+                .constraints(
+                    [
+                        Constraint::Length(3), // ヘッダー
+                        Constraint::Min(2),    // メインコンテンツ (リズム表示)
+                        Constraint::Length(3), // フッター (操作説明)
+                    ]
+                    .as_ref(),
+                )
+                .split(size);
+
+            // ヘッダーの描画
+            let header_text = format!(" Euclidean Rhythm Generator - Example {}/{} ", selected_example + 1, examples.len());
+            let header = Paragraph::new(header_text)
+                .style(Style::default().fg(Color::Cyan))
+                .block(Block::default().borders(Borders::ALL));
+            f.render_widget(header, chunks[0]);
+
+            // メインコンテンツ（リズム）の描画
+            let (pulses, steps, name) = examples[selected_example];
+            let rhythm = euclidean_rhythm(pulses, steps);
+
+            let mut rhythm_display = vec![
+                format!("Name: {}", name),
+                format!("Base: E({}, {}) = [{}]", pulses, steps, rhythm_to_string(&rhythm)),
+                String::from(""),
+                String::from("Rotations:"),
+            ];
+
+            for i in 1..steps {
+                let rotated = rotate_rhythm(&rhythm, i);
+                rhythm_display.push(format!("  Rotation {}: [{}]", i, rhythm_to_string(&rotated)));
+            }
+
+            let text: Text = rhythm_display.join("\n").into();
+            let content = Paragraph::new(text)
+                .block(Block::default().borders(Borders::ALL).title(" Visual Rhythm Presentation "))
+                .style(Style::default().fg(Color::White));
+            f.render_widget(content, chunks[1]);
+
+            // フッターの描画
+            let footer_text = " [q] Quit | [Left/Right] Change Example ";
+            let footer = Paragraph::new(footer_text)
+                .style(Style::default().fg(Color::Yellow))
+                .block(Block::default().borders(Borders::ALL));
+            f.render_widget(footer, chunks[2]);
+
+        })?;
+
+        // イベント処理
+        if event::poll(std::time::Duration::from_millis(50))? {
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Char('q') => break,
+                    KeyCode::Right => {
+                        selected_example = (selected_example + 1) % examples.len();
+                    }
+                    KeyCode::Left => {
+                        if selected_example > 0 {
+                            selected_example -= 1;
+                        } else {
+                            selected_example = examples.len() - 1;
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
-        println!("");
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    // ターミナルのクリーンアップ
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
 
-    #[test]
-    fn test_euclidean_rhythms() {
-        assert_eq!(rhythm_to_string(&euclidean_rhythm(3, 8)), "x..x..x.");
-        assert_eq!(rhythm_to_string(&euclidean_rhythm(5, 8)), "x.xx.xx.");
-        assert_eq!(rhythm_to_string(&euclidean_rhythm(5, 16)), "x..x..x..x..x...");
-        assert_eq!(rhythm_to_string(&euclidean_rhythm(7, 16)), "x..x.x.x..x.x.x.");
-    }
+    Ok(())
 }
